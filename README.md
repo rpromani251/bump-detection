@@ -76,7 +76,18 @@ synthetic models. The conformal result uses real data with a planted penalty.
 - Which pooling rule is best depends on the setting. Geometric pooling wins at the operating
   point shown but not uniformly.
 
-### 3. A model can be calibrated on average and miscalibrated where it matters
+### 3. The threshold interval is calibrated, after fixing a bias I found in my own pipeline
+
+My original pipeline's nominal 95% interval on the recovered threshold had a systematic
+offset. Its coverage was **0.00** with 100 or more anchors, and it got *worse* as anchors were
+added, because the interval tightened around the wrong center. With the offset corrected,
+coverage is **0.945–0.998** across every signal-to-noise level and anchor count tested.
+
+This is measured in simulation, with one planted, axis-aligned boundary and Gaussian noise,
+and only for the threshold. Coverage for the boundary's orientation and offset is not yet
+measured.
+
+### 4. A model can be calibrated on average and miscalibrated where it matters
 
 ![Conformal coverage](figures/conformal_coverage.png)
 
@@ -95,6 +106,8 @@ the boundary, and **zero of 3,420 buildings** under the honest model.
 
 - **Every result is on planted shifts**, in simulation or with a penalty planted into real data.
   The full pipeline has not yet run end-to-end against an adversarially built model.
+- **Smooth, long-wavelength curvature can fool the pooled test.** It can produce a confident
+  boundary on a model that has none. A guard against this is designed but untested.
 - The probe radius and coordinate frame are supplied by hand. Choosing them automatically is
   specified but not implemented.
 - Anchor selection is by design. A screening step that finds good anchors from scratch is the
@@ -102,12 +115,46 @@ the boundary, and **zero of 3,420 buildings** under the honest model.
 - The model is a single hidden region with a constant shift. Gradual or proportional shifts are
   open.
 
-## Where this is going
+## Theory
 
-The empirical results raise a statistical question I'm now working on: **what is the smallest
-hidden shift any audit can detect from a given number of queries, and how much does choosing
-queries adaptively help over a fixed design?** The goal is to apply the answer to settings
-where distribution shift is the core risk, such as LLMs and financial systems.
+### What the method rests on
+
+- **An identifiability limit.** A hard boundary seen through probes of scale σ looks like a
+  smooth transition of width about σ. A smooth model curving on the same scale produces the
+  same response *spread* at every probe scale. So no statistic built from spread alone can tell
+  a hidden shift from ordinary curvature. This is a structural limit, not a weak choice of
+  statistic, and it's why the method tests the *shape* of the response distribution (one clump
+  vs. two). I've argued this and checked it in simulation, but haven't proved it as a formal
+  theorem.
+- **A closed-form distance.** For isotropic Gaussian probes of scale σ around an anchor at
+  distance d from a flat boundary, the fraction of probes that cross is Φ(−d/σ). Inverting it
+  gives the estimator d̂ = −σΦ⁻¹(π̂) in result 1. The derivation is elementary. The work
+  was in estimating π̂ when route membership is never observed.
+
+### The open question I'm working on
+
+**What is the smallest hidden shift any audit can detect from n queries, and how much does
+choosing queries adaptively help over a fixed design?**
+
+Stated formally: observe y = f(x) + noise, with f = f₀ + Δ·1_S, where f₀ is an unknown
+Hölder-smooth function and S is an unknown region. The task is to find the minimax separation
+rate for testing Δ = 0 against Δ ≥ δ, under passive sampling and under adaptive queries.
+
+- **Known:** for a single jump in one dimension with a smooth nuisance and passive sampling,
+  a minimax-optimal test exists. That is the volatility setting of Bibinger, Jirak & Vetter
+  (arXiv:1502.00043). In sparse-vector settings without a smooth nuisance, adaptive sensing is
+  known to help detection (Castro; Haupt, Castro & Nowak).
+- **Open, as far as I've found:** bounded regions of unknown size, two or more dimensions,
+  and above all the passive-vs-adaptive comparison when a smooth nuisance is present. My
+  literature search was limited, so I don't claim novelty yet.
+- **Why I expect adaptivity to matter:** result 2. Moving anchors from chosen to random
+  placement takes pooled power from 0.96 to 0.00.
+
+**Status:** early. I'm working through the one-dimensional case first. No new theorems are
+claimed here.
+
+The goal is to apply the answer to settings where distribution shift is the core risk, such as
+LLMs and financial systems.
 
 ## What is withheld, and why
 
@@ -118,7 +165,7 @@ This is active, unpublished MIT research, so the following are kept private unti
 | Estimator, detector, and pooling implementation | Core method; unpublished |
 | Method notes, derivations, and proofs | In preparation for publication |
 | Experiment code, pre-registrations, and full result tables | Tied to the unpublished method |
-| Theory results on detection limits and adaptive querying | Ongoing work |
+| Work-in-progress theory: proof sketches and conjectured rates | Unfinished; not ready to state publicly |
 
 The figures and numbers above come from the private repository and are reported as measured,
 with the conditions they hold under. **I'm happy to walk through the method, code, and full
